@@ -1,0 +1,1144 @@
+<!--
+========================================================================================
+PROJECT: Alternating Current (AC) Interactive Classroom - เครื่องมือเรียนรู้ไฟฟ้ากระแสสลับ
+VERSION: 1.2.0 (Academic Math Board Edition)
+AUTHOR/CREATOR: Gemini (Google Web Tier)
+ACADEMIC ATTRIBUTION: Inspired by opensimlab.org
+
+========================================================================================
+DESCRIPTION / รายละเอียดโครงการ:
+This interactive web application is designed as an educational tool for physics and electrical 
+engineering classrooms. It bridges the gap between theoretical calculations and real-time visual 
+dynamics of alternating current (AC) through a purely resistive circuit load. 
+
+แอปพลิเคชันเว็บเชิงโต้ตอบนี้ได้รับการออกแบบขึ้นเพื่อเป็นเครื่องมือช่วยสอนในห้องเรียนฟิสิกส์และวิศวกรรมไฟฟ้า 
+โดยเชื่อมโยงทฤษฎีทางคณิตศาสตร์เข้ากับการแสดงผลของรูปคลื่นไฟฟ้ากระแสสลับ (AC) บนโหลดความต้านทานบริสุทธิ์แบบเรียลไทม์
+
+========================================================================================
+KEY FUNCTIONALITIES / ฟังก์ชันเด่น:
+1. Theory & Principles: Detailed dual-language documentation explaining AC basics, Sine waves, 
+   and Root Mean Square (RMS) equations.
+2. Interactive Waveform Simulator: High-fidelity interactive oscilloscope powered by D3.js, 
+   rendering voltage (V) and current (I) curves dynamically with real-time parameter tweaking.
+3. Step-by-Step Mathematical Board: Interactive worksheets calculating values in both forward 
+   (Peak to RMS) and reverse (RMS to Peak with Ohm's verification) directions. Supports:
+   - Sync Mode: Pulls values directly from the interactive simulator.
+   - Manual Board / Randomization Mode: Decouples calculations to allow teachers or students to 
+     input custom exam values or auto-generate randomized academic problems.
+
+========================================================================================
+ARCHITECTURE & DESIGN TOKENS / สถาปัตยกรรมและการออกแบบ:
+- Tech Stack: Pure HTML5, Tailwind CSS (Tailwind CDN v3), D3.js (Data Visualization v7), Vanilla JS.
+- Responsive Design: Implements fluid grid structures and SVG coordinate scaling via HTML5 ResizeObserver, 
+  eliminating the risk of canvas clipping on mobile devices.
+- UI Aesthetics: Light and dark contrast typography, smooth transition animations, and custom range inputs.
+- Localization (i18n): Uses a localized JSON dictionary mapping TH/EN keys on 'data-i18n' attributes.
+- Math Formatting: Rendered using structured HTML fraction structures styled with CSS to produce elegant, 
+  textbook-grade mathematical expressions.
+
+========================================================================================
+DEVELOPER EXTENSION PATHWAYS / คู่มือการพัฒนาต่อยอด (สำหรับวิศวกรผู้พัฒนาต่อในอนาคต):
+This application is designed to be highly modular and easily extendable for advanced electronics curricula:
+- Reactance & Impedance (R-L-C Circuits): To add Inductive (L) or Capacitive (C) reactive elements:
+  1. Introduce Phase Angle Shift (phi / φ) into the sine functions: v(t) = Vp * sin(wt), i(t) = Ip * sin(wt - phi).
+  2. Update the Impedance (Z) calculation: Z = sqrt(R^2 + (XL - XC)^2) instead of purely R.
+  3. Draw a phasor diagram SVG showing the phase difference vector.
+- Power Calculations:
+  - Add Active Power (P = Vrms * Irms * cos(phi)), Reactive Power (Q), and Apparent Power (S) calculations.
+========================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AC Power Simulation - ไฟฟ้ากระแสสลับ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+        
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f8fafc; 
+            scroll-behavior: smooth;
+        }
+
+        /* Premium scrollbar for modern browsers */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Typography & Content Styling */
+        .theory-text {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: #475569;
+            margin-bottom: 1.25rem;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(145deg, #ffffff, #f8fafc);
+            border-left: 5px solid #3b82f6;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Language Toggle (Matching user's screenshot - สกรีนช็อต 2026-05-16 110403.png) */
+        .lang-toggle-container {
+            background-color: #f1f5f9;
+            border-radius: 12px;
+            padding: 4px;
+            display: inline-flex;
+            gap: 4px;
+            border: 1px solid #e2e8f0;
+        }
+        .lang-btn {
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #94a3b8;
+            background: transparent;
+            border: none;
+        }
+        .lang-btn.active {
+            background-color: #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        }
+        .lang-btn#btn-en.active { color: #4b6a9b; } 
+        .lang-btn#btn-th.active { color: #f97316; } 
+
+        /* Custom Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 22px;
+            width: 22px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 2px solid #fff;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        /* Elegant Math Layout styles */
+        .math-font {
+            font-family: 'Playfair Display', 'Georgia', serif;
+        }
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            vertical-align: middle;
+            text-align: center;
+            padding: 0 4px;
+        }
+        .numerator {
+            border-bottom: 2px solid #64748b;
+            padding-bottom: 2px;
+        }
+        .denominator {
+            padding-top: 2px;
+        }
+        
+        /* Smooth transitions for interactive elements */
+        .transition-all-300 {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased relative">
+
+    <!-- Header (Sticky) -->
+    <header class="bg-white/90 backdrop-blur-md text-slate-800 shadow-sm sticky top-0 z-50 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto flex justify-between items-center p-4">
+            <h1 class="text-2xl font-bold flex items-center gap-3 text-blue-700">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8 text-blue-600">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                <span data-i18n="appTitle">Alternating Current (AC)</span>
+            </h1>
+            <div class="flex items-center gap-4">
+                <!-- Lang Toggle Container styled to match สกรีนช็อต 2026-05-16 110403.png -->
+                <div class="lang-toggle-container">
+                    <button id="btn-en" class="lang-btn active" onclick="setLanguage('en')">EN</button>
+                    <button id="btn-th" class="lang-btn" onclick="setLanguage('th')">TH</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Scrolling Container -->
+    <main class="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-10">
+        
+        <!-- SECTION 1: Theory & Principles -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="bg-blue-600 px-6 py-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm">1</span>
+                    <span data-i18n="theoryTitle">Theory & Principles</span>
+                </h2>
+            </div>
+            
+            <div class="p-6 lg:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Left Column: Conceptual explanation of Alternating Currents -->
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3" data-i18n="whatIsAc">What is Alternating Current?</h3>
+                    <p class="theory-text" data-i18n="theoryP1">
+                        <strong>Alternating Current (AC)</strong> is the flow of electric charge that periodically reverses direction. Unlike Direct Current (DC) which flows steadily in one direction (like from a battery), AC is the standard type of electricity delivered to businesses and residences worldwide.
+                    </p>
+                    <h3 class="text-xl font-bold text-slate-800 mt-6 mb-3" data-i18n="sineWaveTitle">The Sine Wave Characteristics</h3>
+                    <p class="theory-text" data-i18n="theoryP2">
+                        The most common AC waveform is a sine wave. It is created by a generator that rotates a coil in a magnetic field. As it rotates, the voltage smoothly rises to a peak, falls to zero, goes to a negative peak, and returns to zero.
+                        <br><br>
+                        In this simulation, we assume a <strong>purely resistive load</strong>. This means the voltage and current are perfectly in sync with each other (Phase Angle φ = 0). When voltage is at its peak, current is also at its peak.
+                    </p>
+                </div>
+                
+                <!-- Right Column: Formulas and Mathematical Foundations -->
+                <div class="flex flex-col gap-5">
+                    <div class="highlight-box p-5 rounded-xl border border-slate-100">
+                        <p class="font-bold text-lg mb-3 text-blue-800 border-b border-blue-100 pb-2" data-i18n="eqTitle">Instantaneous Equations</p>
+                        <div class="font-mono text-center my-2 text-xl bg-slate-50 p-3 rounded-lg border border-slate-200 math-font">
+                            v(t) = V<sub>p</sub> sin(&omega;t)
+                        </div>
+                        <div class="font-mono text-center my-2 text-xl bg-slate-50 p-3 rounded-lg border border-slate-200 math-font">
+                            i(t) = I<sub>p</sub> sin(&omega;t)
+                        </div>
+                        <ul class="text-sm mt-4 text-slate-600 space-y-2">
+                            <li data-i18n="peakDef"><span class="font-bold text-slate-800">V<sub>p</sub>, I<sub>p</sub> : Peak Value</span> - The maximum amplitude.</li>
+                            <li data-i18n="omegaDef"><span class="font-bold text-slate-800">&omega; : Angular Frequency</span> - Rotation speed (rad/s) = 2&pi;f</li>
+                            <li data-i18n="freqDef"><span class="font-bold text-slate-800">f : Frequency</span> - Full cycles per second (Hz)</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-indigo-50 border-l-5 border-indigo-400 p-5 rounded-xl border border-indigo-100 shadow-sm" style="border-left-width: 5px; border-left-color: #818cf8;">
+                        <p class="font-bold text-lg mb-2 text-indigo-900" data-i18n="rmsTitle">Root Mean Square (RMS)</p>
+                        <p class="text-slate-700 text-sm mb-3" data-i18n="rmsDesc">
+                            Because AC changes constantly, we use RMS to define an "effective" steady value. 220V AC from a wall socket is actually 220V RMS, which delivers the same heating power as 220V DC.
+                        </p>
+                        <div class="flex justify-center gap-4 text-center">
+                            <div class="math-font text-base bg-white px-3 py-2 rounded-lg shadow-sm w-full flex items-center justify-center gap-1">
+                                <span>V<sub>rms</sub></span> = <div class="fraction"><span class="numerator">V<sub>p</sub></span><span class="denominator">&radic;2</span></div>
+                            </div>
+                            <div class="math-font text-base bg-white px-3 py-2 rounded-lg shadow-sm w-full flex items-center justify-center gap-1">
+                                <span>I<sub>rms</sub></span> = <div class="fraction"><span class="numerator">I<sub>p</sub></span><span class="denominator">&radic;2</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: Interactive Simulation -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="bg-slate-800 px-6 py-4 flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span class="bg-slate-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm">2</span>
+                    <span data-i18n="simTitle">Interactive Simulation</span>
+                </h2>
+                
+                <!-- Play/Pause Animation State Control -->
+                <button id="playPauseBtn" class="bg-blue-500 hover:bg-blue-400 text-white rounded-full p-2 shadow-lg transition-transform transform hover:scale-105">
+                    <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                        <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clip-rule="evenodd" />
+                    </svg>
+                    <svg id="playIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 hidden">
+                        <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="flex flex-col lg:flex-row border-t border-slate-200">
+                
+                <!-- Simulation Control Panel -->
+                <div class="w-full lg:w-1/3 p-6 bg-slate-50 border-r border-slate-200 flex flex-col gap-6 shrink-0">
+                    <h3 class="font-bold text-lg text-slate-700 border-b border-slate-200 pb-2" data-i18n="paramsTitle">Adjust Parameters</h3>
+                    
+                    <!-- Peak Voltage Input Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-bold text-slate-700" data-i18n="vPeakLabel">Peak Voltage (V<sub>p</sub>)</label>
+                            <span id="voltageValue" class="font-mono text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded text-sm">220 V</span>
+                        </div>
+                        <input type="range" id="voltageInput" min="10" max="350" value="220" step="1">
+                    </div>
+
+                    <!-- Frequency Input Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-bold text-slate-700" data-i18n="freqLabel">Frequency (f)</label>
+                            <span id="freqValue" class="font-mono text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded text-sm">50 Hz</span>
+                        </div>
+                        <input type="range" id="freqInput" min="1" max="100" value="50" step="1">
+                    </div>
+
+                    <!-- Load Resistance Input Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-bold text-slate-700" data-i18n="resLabel">Resistance (R)</label>
+                            <span id="resValue" class="font-mono text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded text-sm">100 &Omega;</span>
+                        </div>
+                        <input type="range" id="resInput" min="10" max="500" value="100" step="5">
+                    </div>
+                    
+                    <!-- Time-scaling Speed Slider -->
+                    <div class="mt-auto pt-4 border-t border-slate-200">
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-bold text-slate-500" data-i18n="speedLabel">Simulation Speed</label>
+                            <span id="speedValue" class="font-mono text-slate-500 text-sm">1.0x</span>
+                        </div>
+                        <input type="range" id="speedInput" min="0.1" max="3" value="1" step="0.1">
+                    </div>
+                </div>
+                
+                <!-- Dynamic Oscilloscope Graphic Area (Rendered with D3.js) -->
+                <div class="w-full lg:w-2/3 p-4 flex flex-col relative min-h-[450px]">
+                    <div class="flex justify-end gap-4 mb-2 pr-4 text-sm font-bold">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div> <span class="text-slate-600" data-i18n="voltage">Voltage (V)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div> <span class="text-slate-600" data-i18n="current">Current (A)</span>
+                        </div>
+                    </div>
+                    <!-- Target Responsive Container for D3 Canvas -->
+                    <div id="graph-container" class="flex-1 w-full h-full relative min-h-[400px]"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: Live Calculations & Detailed Mathematical Workouts -->
+        <section class="flex flex-col gap-6">
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="max-w-2xl">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <span class="bg-emerald-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-sm">3</span>
+                        <span data-i18n="calcTitle">Detailed Step-by-Step Mathematical Calculations</span>
+                    </h2>
+                    <p class="text-sm text-slate-500 animate-pulse" data-i18n="calcSub">Adjust the sliders in Section 2 to see how the mathematical equations recalculate in real-time.</p>
+                </div>
+                
+                <!-- INTERACTIVE EXERCISE RANDOMIZER CONTROLLER -->
+                <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-3 shrink-0 md:max-w-xs w-full">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-black uppercase text-slate-500 tracking-wider" data-i18n="exCtrlLabel">Problem Controller</label>
+                        <span id="exModeIndicator" class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold uppercase">Linked</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" id="syncExerciseToggle" checked class="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500">
+                        <label for="syncExerciseToggle" class="font-semibold text-slate-700 cursor-pointer text-xs" data-i18n="syncToggle">Sync with Simulator</label>
+                    </div>
+
+                    <div id="manualExControls" class="hidden flex flex-col gap-2 pt-2 border-t border-slate-200">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Volt Peak (Vp)</label>
+                                <input type="number" id="manualVp" min="1" max="1000" value="220" class="w-full bg-white border border-slate-200 rounded p-1 text-xs font-mono font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Resistance (R)</label>
+                                <input type="number" id="manualR" min="1" max="2000" value="100" class="w-full bg-white border border-slate-200 rounded p-1 text-xs font-mono font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btnRandomizeEx" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-2 px-3 rounded-xl shadow-sm text-xs transition-transform transform active:scale-95 flex items-center justify-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                        <span data-i18n="btnRandom">Randomize Exercise</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- EXAMPLE 1: Finding RMS Values from Peak Values (Forward) -->
+                <div class="bg-white rounded-3xl shadow-md border-t-4 border-blue-500 border border-slate-200 p-6 flex flex-col gap-5 transition-all-300 hover:shadow-lg">
+                    <div class="border-b border-slate-100 pb-3">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider" data-i18n="directionForward">Forward Process</span>
+                        <h3 class="text-lg font-bold text-slate-800 mt-2" data-i18n="ex1Title">Example 1: Finding RMS Values from Peak Values</h3>
+                        <p class="text-xs text-slate-500 mt-1" data-i18n="ex1Desc">Given the peak characteristics of the AC generator and circuit load, compute the effective values.</p>
+                    </div>
+
+                    <!-- Dynamic Steps for Example 1 -->
+                    <div id="workout-ex1" class="space-y-6">
+                        <!-- Filled Dynamically via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- EXAMPLE 2: Reconstructing Peak Values from RMS Values (Reverse) -->
+                <div class="bg-white rounded-3xl shadow-md border-t-4 border-purple-500 border border-slate-200 p-6 flex flex-col gap-5 transition-all-300 hover:shadow-lg">
+                    <div class="border-b border-slate-100 pb-3">
+                        <span class="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider" data-i18n="directionReverse">Reverse Process</span>
+                        <h3 class="text-lg font-bold text-slate-800 mt-2" data-i18n="ex2Title">Example 2: Reconstructing Peak Values from RMS Values</h3>
+                        <p class="text-xs text-slate-500 mt-1" data-i18n="ex2Desc">Starting only with known effective measuring points, reconstruct the source peak values.</p>
+                    </div>
+
+                    <!-- Dynamic Steps for Example 2 -->
+                    <div id="workout-ex2" class="space-y-6">
+                        <!-- Filled Dynamically via JavaScript -->
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Footer containing classroom credit tags -->
+        <footer class="mt-8 pb-12 text-center text-slate-500 text-sm">
+            <p><span data-i18n="credit1">Original Concept inspired by</span> <a href="https://opensimlab.org" target="_blank" class="text-blue-600 hover:text-blue-800 font-bold transition-colors">opensimlab.org</a></p>
+            <p class="mt-1"><span data-i18n="credit2">Designed and Coded by</span> <span class="font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-md ml-1">Gemini</span></p>
+        </footer>
+
+    </main>
+
+    <script>
+        /**
+         * PROJECT OVERVIEW & ARCHITECTURAL SUMMARY:
+         * 
+         * This classroom interactive system simulates alternating current (AC) across a resistive circuit load.
+         * The objective is to demonstrate the relationships between instantaneous peaks (Vp, Ip) and 
+         * Root Mean Square (Vrms, Irms) equivalents visually and analytically.
+         * 
+         * MAIN STATE VARIABLES:
+         * - Vp, f, R: Operational simulation parameters bound to the HTML sliders.
+         * - ex_Vp, ex_R: Decoupled problem variables for math examples, either synced with simulated values or manually altered/randomized.
+         * - isPlaying: Controls animation timing loops.
+         * - currentLang: Handles rendering system languages dynamically (TH / EN).
+         * 
+         * TECHNOLOGY STACK:
+         * - CSS Framework: Tailwind CSS for clean layout styles.
+         * - Visualization Engine: D3.js for high-fidelity canvas/SVG plotting with scaling functions.
+         */
+
+        const translations = {
+            en: {
+                appTitle: "Alternating Current (AC) Classroom",
+                theoryTitle: "Theory & Principles",
+                whatIsAc: "What is Alternating Current?",
+                theoryP1: "<strong>Alternating Current (AC)</strong> is the flow of electric charge that periodically reverses direction. Unlike Direct Current (DC) which flows steadily in one direction (like from a battery), AC is the standard type of electricity delivered to businesses and residences worldwide.",
+                sineWaveTitle: "The Sine Wave Characteristics",
+                theoryP2: "The most common AC waveform is a sine wave. It is created by a generator that rotates a coil in a magnetic field. As it rotates, the voltage smoothly rises to a peak, falls to zero, goes to a negative peak, and returns to zero.<br><br>In this simulation, we assume a <strong>purely resistive load</strong>. This means the voltage and current are perfectly in sync with each other (Phase Angle φ = 0). When voltage is at its peak, current is also at its peak.",
+                eqTitle: "Instantaneous Equations",
+                peakDef: "<span class=\"font-bold text-slate-800\">V<sub>p</sub>, I<sub>p</sub> : Peak Value</span> - The maximum amplitude.",
+                omegaDef: "<span class=\"font-bold text-slate-800\">&omega; : Angular Frequency</span> - Rotation speed (rad/s) = 2&pi;f",
+                freqDef: "<span class=\"font-bold text-slate-800\">f : Frequency</span> - Full cycles per second (Hz)",
+                rmsTitle: "Root Mean Square (RMS)",
+                rmsDesc: "Because AC changes constantly, we use RMS to define an \"effective\" steady value. 220V AC from a wall socket is actually 220V RMS, which delivers the same heating power as 220V DC.",
+                simTitle: "Interactive Waveform Simulator",
+                paramsTitle: "Adjust Parameters",
+                vPeakLabel: "Peak Voltage (V<sub>p</sub>)",
+                freqLabel: "Frequency (f)",
+                resLabel: "Resistance (R)",
+                speedLabel: "Simulation Speed",
+                voltage: "Voltage (V)",
+                current: "Current (A)",
+                calcTitle: "Detailed Step-by-Step Mathematical Calculations",
+                calcSub: "Adjust the sliders in Section 2 to see how the mathematical equations recalculate in real-time.",
+                directionForward: "Forward Process (Peak to RMS)",
+                directionReverse: "Reverse Process (RMS to Peak)",
+                ex1Title: "Example 1: Finding RMS Values from Peak Values",
+                ex1Desc: "Given the peak characteristics of the AC generator and circuit load, compute the effective values.",
+                ex2Title: "Example 2: Reconstructing Peak Values from RMS Values",
+                ex2Desc: "Starting only with known effective measuring points, reconstruct the source peak values.",
+                labelTime: "Time (Seconds)",
+                credit1: "Original Concept inspired by",
+                credit2: "Designed and Coded by",
+                
+                // Problem Board specific English literals
+                exCtrlLabel: "Math Board Controls",
+                syncToggle: "Sync with Live Simulator",
+                btnRandom: "Randomize Exercise Values",
+                indicatorLinked: "Linked",
+                indicatorDecoupled: "Custom Board",
+                
+                step1: "Step 1: Identify Given Variables",
+                step1_desc: "We look at the parameters chosen for this math board:",
+                step2: "Step 2: Calculate Peak Current (Ohm's Law)",
+                step2_desc: "First, we calculate the peak current using Ohm's Law:",
+                step3: "Step 3: Calculate RMS Values",
+                step3_desc: "Now, we calculate the effective (RMS) Voltage and Current by dividing the peak values by the square root of 2:",
+                finalResult: "Final Answers (RMS Value)",
+                
+                ex2_step1: "Step 1: Given Measured RMS Values",
+                ex2_step1_desc: "We start with the calculated RMS results from the previous step:",
+                ex2_step2: "Step 2: Calculate Peak Values (Reversed Math)",
+                ex2_step2_desc: "To find the peak values, we multiply the RMS measurements by the square root of 2:",
+                ex2_step3: "Step 3: Verification (Ohm's Law Confirmation)",
+                ex2_step3_desc: "We can verify our calculations by calculating the resistance R using the reconstructed peak values:",
+                ex2_finalResult: "Reconstructed & Verified System Parameters"
+            },
+            th: {
+                appTitle: "ห้องเรียนไฟฟ้ากระแสสลับ (AC Power)",
+                theoryTitle: "ทฤษฎีและหลักการพื้นฐาน",
+                whatIsAc: "ไฟฟ้ากระแสสลับ คืออะไร?",
+                theoryP1: "<strong>ไฟฟ้ากระแสสลับ (Alternating Current: AC)</strong> คือกระแสไฟฟ้าที่มีทิศทางการไหลกลับไปกลับมาอย่างเป็นคาบ ต่างจากไฟฟ้ากระแสตรง (DC) ที่ไหลไปในทิศทางเดียวเสมอ (เช่น ไฟจากแบตเตอรี่) ไฟฟ้าที่เราใช้ในบ้านและโรงงานอุตสาหกรรมส่วนใหญ่ล้วนเป็นแบบกระแสสลับ",
+                sineWaveTitle: "ลักษณะของคลื่นไซน์ (Sine Wave)",
+                theoryP2: "รูปแบบคลื่นที่พบบ่อยที่สุดคือ คลื่นไซน์ ซึ่งเกิดจากการหมุนขดลวดตัดผ่านสนามแม่เหล็กในเครื่องกำเนิดไฟฟ้า แรงดันไฟฟ้าจะค่อยๆ เพิ่มขึ้นจนถึงจุดสูงสุด ลดลงมาเป็นศูนย์ ทะลุลงไปติดลบ และกลับมาที่ศูนย์อีกครั้ง เป็นวงจรแบบนี้ไปเรื่อยๆ<br><br>ในแบบจำลองนี้ เรากำหนดให้โหลดเป็น<strong>ความต้านทานบริสุทธิ์ (Resistive Load)</strong> ซึ่งหมายความว่าแรงดันและกระแสไฟฟ้าจะเคลื่อนที่ไปพร้อมกันเป๊ะๆ (ไม่มีมุมเฟสแตกต่างกัน หรือ φ = 0)",
+                eqTitle: "สมการชั่วขณะ (Instantaneous Equations)",
+                peakDef: "<span class=\"font-bold text-slate-800\">V<sub>p</sub>, I<sub>p</sub> : ค่ายอด (Peak)</span> - ค่าสูงสุดของคลื่น",
+                omegaDef: "<span class=\"font-bold text-slate-800\">&omega; : ความถี่เชิงมุม</span> - ความเร็วในการหมุนรอบ (rad/s) = 2&pi;f",
+                freqDef: "<span class=\"font-bold text-slate-800\">f : ความถี่</span> - จำนวนรอบของคลื่นใน 1 วินาที (Hz)",
+                rmsTitle: "ค่ารากเฉลี่ยกำลังสอง (RMS Value)",
+                rmsDesc: "เนื่องจากไฟฟ้า AC มีค่าขึ้นลงตลอดเวลา เราจึงใช้ค่า RMS เพื่อบอก \"ค่าที่ใช้งานจริง\" เช่น ไฟบ้าน 220V หมายถึง 220V RMS ซึ่งจะให้พลังงานความร้อนเท่ากับไฟ DC 220V พอดี",
+                simTitle: "แบบจำลองรูปคลื่นเชิงโต้ตอบ",
+                paramsTitle: "ปรับตั้งค่าพารามิเตอร์วงจร",
+                vPeakLabel: "แรงดันสูงสุด (V<sub>p</sub>)",
+                freqLabel: "ความถี่ (f)",
+                resLabel: "ความต้านทาน (R)",
+                speedLabel: "ความเร็วแอนิเมชัน",
+                voltage: "แรงดัน (V)",
+                current: "กระแส (A)",
+                calcTitle: "การแสดงวิธีคำนวณอย่างละเอียดตามหลักคณิตศาสตร์",
+                calcSub: "ปรับแผงควบคุมด้านบนเพื่อสุ่มตัวเลข คีย์เลขเอง หรือปรับแถบเลื่อนจำลองเพื่อดูวิธีทำอย่างละเอียดแบบเรียลไทม์",
+                directionForward: "ขั้นตอนขาไป (จากยอด Peak ไปหา RMS)",
+                directionReverse: "ขั้นตอนย้อนกลับ (จากค่า RMS กลับไปหา Peak)",
+                ex1Title: "ตัวอย่างที่ 1: การหาค่า RMS จากค่ายอด (Peak)",
+                ex1Desc: "เมื่อกำหนดค่าสูงสุด (Peak) ของเครื่องกำเนิดไฟฟ้ากระแสสลับและโหลดมาให้ ให้คำนวณหาค่าที่วัดได้จริง (RMS)",
+                ex2Title: "ตัวอย่างที่ 2: การคำนวณย้อนกลับจากค่า RMS เพื่อหาค่ายอด (Peak)",
+                ex2Desc: "เริ่มจากค่าที่วัดได้จริงทางไฟฟ้า (RMS) ทำการคำนวณย้อนกลับเพื่อหาค่าแรงดันและกระแสสูงสุดที่จุดยอด (Peak)",
+                labelTime: "เวลา (วินาที)",
+                credit1: "แรงบันดาลใจจากต้นฉบับ",
+                credit2: "ออกแบบและเขียนโค้ดโดย",
+                
+                // Problem Board specific Thai literals
+                exCtrlLabel: "กล่องควบคุมโจทย์ฝึกฝน",
+                syncToggle: "ซิงก์ค่าตามแถบปรับจำลองหลัก",
+                btnRandom: "สุ่มตัวเลขโจทย์ชุดใหม่",
+                indicatorLinked: "เชื่อมโยงอยู่",
+                indicatorDecoupled: "โจทย์กำหนดเอง",
+                
+                step1: "ขั้นตอนที่ 1: ระบุตัวแปรเริ่มต้น",
+                step1_desc: "อ่านค่าแรงดันกระแสและตัวต้านทานที่ระบุในชุดโจทย์คณิตศาสตร์นี้:",
+                step2: "ขั้นตอนที่ 2: คำนวณหากระแสไฟฟ้าสูงสุด (กฎของโอห์ม)",
+                step2_desc: "ก่อนหาค่า RMS ของกระแส เราต้องหาค่ากระแสสูงสุด (Peak Current) ของคลื่นกระแสไฟฟ้าก่อน:",
+                step3: "ขั้นตอนที่ 3: คำนวณหาค่า RMS (Root Mean Square)",
+                step3_desc: "คำนวณค่าแรงดันและกระแสประสิทธิผล (RMS) โดยนำค่ายอด (Peak) หารด้วยตัวหารคงที่รากที่สองของสอง (&radic;2):",
+                finalResult: "สรุปคำตอบตัวอย่างที่ 1 (ค่า RMS ที่ทำงานจริง)",
+                
+                ex2_step1: "ขั้นตอนที่ 1: ระบุค่าตั้งต้นจากผลลัพธ์ RMS",
+                ex2_step1_desc: "นำค่าเฉลี่ย RMS ที่วัดผลจริงได้จากตัวอย่างด้านซ้ายมาใช้ตั้งโจทย์ย้อนกลับ:",
+                ex2_step2: "ขั้นตอนที่ 2: คำนวณย้อนกลับหาค่ายอดสูงสุด (Peak)",
+                ex2_step2_desc: "กู้คืนค่ายอดสูงสุดแรงดันและกระแสโดยนำค่า RMS คูณเข้าด้วยรากที่สองของสอง (&radic;2):",
+                ex2_step3: "ขั้นตอนที่ 3: ตรวจคำตอบตามหลักวิศวกรรมไฟฟ้า",
+                ex2_step3_desc: "ตรวจสอบความต้านทาน R ของวงจรจากยอดแรงดันและกระแสไฟฟ้าที่กู้คืนมาได้จริงตามกฎของโอห์ม:",
+                ex2_finalResult: "สรุปค่าทางพารามิเตอร์ระบบวงจรที่กู้คืนเสร็จสิ้น"
+            }
+        };
+
+        // Active Application States
+        let currentLang = 'en'; 
+
+        // Active Simulation Values (Bound to Sliders in Sec 2)
+        let Vp = 220;
+        let f = 50; 
+        let R = 100;
+        let simSpeed = 1;
+        let isPlaying = true;
+        let t = 0; 
+        let animationFrameId;
+
+        // Decoupled Exercise State Variables (Bound to Math Workout in Sec 3)
+        let ex_Vp = 220;
+        let ex_R = 100;
+        let isSyncedWithSim = true;
+        
+        // Main DOM Elements Registry
+        const elements = {
+            vInput: document.getElementById('voltageInput'), 
+            vValue: document.getElementById('voltageValue'),
+            fInput: document.getElementById('freqInput'), 
+            fValue: document.getElementById('freqValue'),
+            rInput: document.getElementById('resInput'), 
+            rValue: document.getElementById('resValue'),
+            speedInput: document.getElementById('speedInput'), 
+            speedValue: document.getElementById('speedValue'),
+            playPauseBtn: document.getElementById('playPauseBtn'),
+            playIcon: document.getElementById('playIcon'),
+            pauseIcon: document.getElementById('pauseIcon'),
+            workoutEx1: document.getElementById('workout-ex1'),
+            workoutEx2: document.getElementById('workout-ex2'),
+            
+            // Exercise board controls
+            syncToggle: document.getElementById('syncExerciseToggle'),
+            manualControls: document.getElementById('manualExControls'),
+            manualVp: document.getElementById('manualVp'),
+            manualR: document.getElementById('manualR'),
+            btnRandomize: document.getElementById('btnRandomizeEx'),
+            exModeIndicator: document.getElementById('exModeIndicator')
+        };
+
+        // Configuration Parameters for the D3 Dynamic Plot
+        const container = document.getElementById('graph-container');
+        let width, height;
+        let svg, xAxis, yAxisLeft, yAxisRight, lineV, lineI;
+        let xScale, yScaleV, yScaleI;
+        
+        const margin = {top: 20, right: 50, bottom: 40, left: 50};
+        const numPeriodsToShow = 2.5; 
+        let dataV = [];
+        let dataI = [];
+        const numPoints = 400; 
+
+        /**
+         * Sets application localization dynamically
+         * @param {string} lang - Selected language locale code ('th' / 'en')
+         */
+        function setLanguage(lang) {
+            currentLang = lang;
+            
+            // Adjust visual classes for active toggles
+            document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+            document.getElementById('btn-th').classList.toggle('active', lang === 'th');
+
+            // Render i18n text changes for elements carrying 'data-i18n' tags
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    el.innerHTML = translations[lang][key];
+                }
+            });
+            
+            // Update the textual labels on active D3 coordinates
+            if (svg) {
+                svg.select(".label-v").text(translations[lang].voltage);
+                svg.select(".label-i").text(translations[lang].current);
+                svg.select(".label-time").text(translations[lang].labelTime);
+            }
+
+            // Sync indicators and calculations
+            updateExerciseModeUI();
+            updateCalculations();
+        }
+
+        /**
+         * Orchestrates updates for values pulled from active UI controls,
+         * synchronizes variables, and initiates visual graphs and workouts rendering.
+         */
+        function updateCalculations() {
+            // Pull raw slider parameters
+            Vp = parseFloat(elements.vInput.value);
+            f = parseFloat(elements.fInput.value);
+            R = parseFloat(elements.rInput.value);
+            simSpeed = parseFloat(elements.speedInput.value);
+            
+            // Write to UI elements text indicators
+            elements.vValue.innerText = `${Vp} V`;
+            elements.fValue.innerText = `${f} Hz`;
+            elements.rValue.innerText = `${R} \u03a9`;
+            elements.speedValue.innerText = `${simSpeed.toFixed(1)}x`;
+
+            // Handle synchronization behavior between Sim sliders and Exercise Panel
+            if (isSyncedWithSim) {
+                ex_Vp = Vp;
+                ex_R = R;
+                // Force sync actual inputs inside the control panel
+                elements.manualVp.value = ex_Vp;
+                elements.manualR.value = ex_R;
+            } else {
+                // Read from manual exercise fields instead
+                ex_Vp = parseFloat(elements.manualVp.value) || 220;
+                ex_R = parseFloat(elements.manualR.value) || 100;
+            }
+
+            // Pre-calculate Exercise Mathematical Results
+            const ex_Ip = ex_Vp / ex_R;
+            const ex_Vrms = ex_Vp / Math.SQRT2;
+            const ex_Irms = ex_Ip / Math.SQRT2;
+
+            // Generate Step-by-Step Math Workouts with active exercise states
+            renderEx1Workout(ex_Vp, ex_R, ex_Ip, ex_Vrms, ex_Irms);
+            renderEx2Workout(ex_Vrms, ex_Irms, ex_Vp, ex_Ip, ex_R);
+
+            // Re-render D3 components
+            if (width > 0 && height > 0) {
+                const activeSimulationIp = Vp / R;
+                updateChartScales(activeSimulationIp, f);
+                generateStaticData(); 
+                drawPaths();
+            }
+        }
+
+        /**
+         * Renders dynamic layout content for Example 1 Peak -> RMS workout
+         */
+        function renderEx1Workout(localVp, localR, localIp, localVrms, localIrms) {
+            const strings = translations[currentLang];
+            elements.workoutEx1.innerHTML = `
+                <!-- Step 1 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs flex items-center justify-center font-bold">1</span>
+                        ${strings.step1}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.step1_desc}</p>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono text-xs grid grid-cols-2 gap-2">
+                        <div>Peak Voltage (<span class="math-font text-sm">V<sub>p</sub></span>): <strong class="text-blue-600">${localVp} V</strong></div>
+                        <div>Resistance (<span class="math-font text-sm">R</span>): <strong class="text-emerald-600">${localR} &Omega;</strong></div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs flex items-center justify-center font-bold">2</span>
+                        ${strings.step2}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.step2_desc}</p>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm flex flex-col gap-3">
+                        <div class="flex items-center justify-center font-mono math-font">
+                            <span>I<sub>p</sub></span> &nbsp;=&nbsp; 
+                            <div class="fraction">
+                                <span class="numerator">V<sub>p</sub></span>
+                                <span class="denominator">R</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center font-mono math-font text-slate-500">
+                            <span>I<sub>p</sub></span> &nbsp;=&nbsp; 
+                            <div class="fraction">
+                                <span class="numerator">${localVp} V</span>
+                                <span class="denominator">${localR} &Omega;</span>
+                            </div>
+                        </div>
+                        <div class="text-center font-bold text-blue-700 font-mono text-base border-t border-dashed border-slate-200 pt-2">
+                            I<sub>p</sub> = ${localIp.toFixed(4)} A
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-xs flex items-center justify-center font-bold">3</span>
+                        ${strings.step3}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.step3_desc}</p>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm space-y-4">
+                        <!-- Voltage RMS math -->
+                        <div class="border-b border-slate-200 border-dashed pb-3">
+                            <div class="flex items-center justify-center font-mono math-font mb-2">
+                                <span>V<sub>rms</sub></span> &nbsp;=&nbsp; 
+                                <div class="fraction">
+                                    <span class="numerator">V<sub>p</sub></span>
+                                    <span class="denominator">&radic;2</span>
+                                </div>
+                                &nbsp;&approx;&nbsp;
+                                <div class="fraction">
+                                    <span class="numerator">V<sub>p</sub></span>
+                                    <span class="denominator">1.4142</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-center font-mono math-font text-slate-500 mb-2">
+                                <span>V<sub>rms</sub></span> &nbsp;=&nbsp; 
+                                <div class="fraction">
+                                    <span class="numerator">${localVp}</span>
+                                    <span class="denominator">1.4142</span>
+                                </div>
+                            </div>
+                            <div class="text-center font-bold text-blue-600 font-mono">V<sub>rms</sub> = ${localVrms.toFixed(2)} V</div>
+                        </div>
+
+                        <!-- Current RMS math -->
+                        <div>
+                            <div class="flex items-center justify-center font-mono math-font mb-2">
+                                <span>I<sub>rms</sub></span> &nbsp;=&nbsp; 
+                                <div class="fraction">
+                                    <span class="numerator">I<sub>p</sub></span>
+                                    <span class="denominator">&radic;2</span>
+                                </div>
+                                &nbsp;&approx;&nbsp;
+                                <div class="fraction">
+                                    <span class="numerator">I<sub>p</sub></span>
+                                    <span class="denominator">1.4142</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-center font-mono math-font text-slate-500 mb-2">
+                                <span>I<sub>rms</sub></span> &nbsp;=&nbsp; 
+                                <div class="fraction">
+                                    <span class="numerator">${localIp.toFixed(4)}</span>
+                                    <span class="denominator">1.4142</span>
+                                </div>
+                            </div>
+                            <div class="text-center font-bold text-red-600 font-mono">I<sub>rms</sub> = ${localIrms.toFixed(4)} A</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Example 1 Final Answer box -->
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex flex-col gap-2 mt-auto">
+                    <h5 class="text-xs font-bold text-blue-800 uppercase tracking-wide">${strings.finalResult}</h5>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Voltage RMS</span>
+                            <div class="text-xl font-black text-blue-700 font-mono">${localVrms.toFixed(2)}<span class="text-xs font-bold text-slate-500 ml-1">V</span></div>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Current RMS</span>
+                            <div class="text-xl font-black text-red-600 font-mono">${localIrms.toFixed(4)}<span class="text-xs font-bold text-slate-500 ml-1">A</span></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Renders dynamic layout content for Example 2 RMS -> Peak workout (Reversed Process)
+         */
+        function renderEx2Workout(localVrms, localIrms, localVp, localIp, localR) {
+            const strings = translations[currentLang];
+            elements.workoutEx2.innerHTML = `
+                <!-- Step 1 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-xs flex items-center justify-center font-bold">1</span>
+                        ${strings.ex2_step1}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.ex2_step1_desc}</p>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono text-xs grid grid-cols-2 gap-2">
+                        <div>RMS Voltage (<span class="math-font text-sm">V<sub>rms</sub></span>): <strong class="text-purple-600">${localVrms.toFixed(2)} V</strong></div>
+                        <div>RMS Current (<span class="math-font text-sm">I<sub>rms</sub></span>): <strong class="text-purple-600">${localIrms.toFixed(4)} A</strong></div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-xs flex items-center justify-center font-bold">2</span>
+                        ${strings.ex2_step2}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.ex2_step2_desc}</p>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm space-y-4">
+                        <!-- Reconstructing Peak Voltage -->
+                        <div class="border-b border-slate-200 border-dashed pb-3">
+                            <div class="flex items-center justify-center font-mono math-font mb-1">
+                                <span>V<sub>p</sub></span> &nbsp;=&nbsp; V<sub>rms</sub> &times; &radic;2 &nbsp;&approx;&nbsp; V<sub>rms</sub> &times; 1.4142
+                            </div>
+                            <div class="flex items-center justify-center font-mono math-font text-slate-500 mb-1">
+                                <span>V<sub>p</sub></span> &nbsp;=&nbsp; ${localVrms.toFixed(2)} V &times; 1.4142
+                            </div>
+                            <div class="text-center font-bold text-purple-600 font-mono">V<sub>p</sub> = ${localVp.toFixed(2)} V</div>
+                        </div>
+
+                        <!-- Reconstructing Peak Current -->
+                        <div>
+                            <div class="flex items-center justify-center font-mono math-font mb-1">
+                                <span>I<sub>p</sub></span> &nbsp;=&nbsp; I<sub>rms</sub> &times; &radic;2 &nbsp;&approx;&nbsp; I<sub>rms</sub> &times; 1.4142
+                            </div>
+                            <div class="flex items-center justify-center font-mono math-font text-slate-500 mb-1">
+                                <span>I<sub>p</sub></span> &nbsp;=&nbsp; ${localIrms.toFixed(4)} A &times; 1.4142
+                            </div>
+                            <div class="text-center font-bold text-purple-600 font-mono">I<sub>p</sub> = ${localIp.toFixed(4)} A</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-xs flex items-center justify-center font-bold">3</span>
+                        ${strings.ex2_step3}
+                    </h4>
+                    <p class="text-xs text-slate-500">${strings.ex2_step3_desc}</p>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm">
+                        <div class="flex items-center justify-center font-mono math-font mb-2">
+                            <span>R</span> &nbsp;=&nbsp; 
+                            <div class="fraction">
+                                <span class="numerator">V<sub>p</sub></span>
+                                <span class="denominator">I<sub>p</sub></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center font-mono math-font text-slate-500 mb-2">
+                            <span>R</span> &nbsp;=&nbsp; 
+                            <div class="fraction">
+                                <span class="numerator">${localVp.toFixed(2)} V</span>
+                                <span class="denominator">${localIp.toFixed(4)} A</span>
+                            </div>
+                        </div>
+                        <div class="text-center font-bold text-emerald-600 font-mono text-base border-t border-dashed border-slate-200 pt-2">
+                            R = ${(localVp / localIp).toFixed(2)} &Omega; (Matches Original R = ${localR} &Omega;!)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Example 2 Final Answer box -->
+                <div class="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex flex-col gap-2 mt-auto">
+                    <h5 class="text-xs font-bold text-purple-800 uppercase tracking-wide">${strings.ex2_finalResult}</h5>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-3 rounded-xl border border-purple-100 text-center">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Peak Voltage (Vp)</span>
+                            <div class="text-xl font-black text-purple-700 font-mono">${localVp.toFixed(1)}<span class="text-xs font-bold text-slate-500 ml-1">V</span></div>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl border border-purple-100 text-center">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Peak Current (Ip)</span>
+                            <div class="text-xl font-black text-purple-700 font-mono">${localIp.toFixed(2)}<span class="text-xs font-bold text-slate-500 ml-1">A</span></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Initializes and scales the dynamic D3 SVG element canvas. Called once on initialization and on window resizes.
+         * @param {number} newWidth - Width of the host container element
+         * @param {number} newHeight - Height of the host container element
+         */
+        function initChart(newWidth, newHeight) {
+            if (!newWidth || !newHeight) return;
+
+            // Offset inner plot space using margin vectors
+            width = newWidth - margin.left - margin.right;
+            height = newHeight - margin.top - margin.bottom;
+
+            // Clear legacy SVGs
+            d3.select("#graph-container").selectAll("svg").remove();
+
+            // Append SVG to container DOM
+            svg = d3.select("#graph-container")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Scaling functions map numerical ranges to Cartesian screen space pixels
+            xScale = d3.scaleLinear().range([0, width]);
+            yScaleV = d3.scaleLinear().range([height, 0]);
+            yScaleI = d3.scaleLinear().range([height, 0]);
+
+            // Draw operational background gridlines
+            svg.append("g").attr("class", "grid").attr("opacity", 0.08).attr("transform", `translate(0,${height/2})`).call(d3.axisBottom(xScale).tickSize(-height/2).tickFormat(""));
+            svg.append("g").attr("class", "grid").attr("opacity", 0.08).call(d3.axisLeft(yScaleV).tickSize(-width).tickFormat(""));
+
+            // Initialize visual axes groups
+            xAxis = svg.append("g").attr("class", "text-slate-500 font-mono text-xs");
+            yAxisLeft = svg.append("g").attr("class", "text-blue-600 font-mono text-xs");
+            yAxisRight = svg.append("g").attr("transform", `translate(${width},0)`).attr("class", "text-red-600 font-mono text-xs");
+
+            // Line plotting generators
+            lineV = d3.line().x(d => xScale(d.time)).y(d => yScaleV(d.value)).curve(d3.curveBasis);
+            lineI = d3.line().x(d => xScale(d.time)).y(d => yScaleI(d.value)).curve(d3.curveBasis);
+
+            // Path templates for static backdrop wave previews
+            svg.append("path").attr("class", "bg-path-v").attr("fill", "none").attr("stroke", "#3b82f6").attr("stroke-width", 2).attr("opacity", 0.15).attr("stroke-dasharray", "4,4");
+            svg.append("path").attr("class", "bg-path-i").attr("fill", "none").attr("stroke", "#ef4444").attr("stroke-width", 2).attr("opacity", 0.15).attr("stroke-dasharray", "4,4");
+
+            // Active path templates for real-time progressive wave coloring
+            svg.append("path").attr("class", "active-path-v").attr("fill", "none").attr("stroke", "#2563eb").attr("stroke-width", 3.5);
+            svg.append("path").attr("class", "active-path-i").attr("fill", "none").attr("stroke", "#dc2626").attr("stroke-width", 3.5);
+
+            // Interactive oscilloscope dynamic sweep indicators
+            const markerG = svg.append("g");
+            markerG.append("line").attr("class", "time-line").attr("stroke", "#94a3b8").attr("stroke-width", 1.5).attr("stroke-dasharray", "3,3").attr("y1", 0).attr("y2", height);
+            markerG.append("circle").attr("class", "dot-v").attr("r", 5).attr("fill", "#fff").attr("stroke", "#2563eb").attr("stroke-width", 2);
+            markerG.append("circle").attr("class", "dot-i").attr("r", 5).attr("fill", "#fff").attr("stroke", "#dc2626").attr("stroke-width", 2);
+
+            // Labels setup
+            svg.append("text").attr("transform", "rotate(-90)").attr("y", -margin.left + 15).attr("x", -(height/2)).attr("dy", "1em").style("text-anchor", "middle").attr("class", "label-v text-xs fill-blue-600 font-bold").text(translations[currentLang].voltage);
+            svg.append("text").attr("transform", "rotate(-90)").attr("y", width + margin.right - 25).attr("x", -(height/2)).attr("dy", "1em").style("text-anchor", "middle").attr("class", "label-i text-xs fill-red-600 font-bold").text(translations[currentLang].current);
+            svg.append("text").attr("transform", `translate(${width/2}, ${height + margin.bottom - 5})`).style("text-anchor", "middle").attr("class", "label-time text-xs fill-slate-500 font-bold").text(translations[currentLang].labelTime);
+        }
+
+        /**
+         * Re-adjusts domains dynamically based on frequency and maximum computed peak amplitudes
+         * @param {number} Ip - Maximum current peak in Amps
+         * @param {number} freq - AC Frequency in Hz
+         */
+        function updateChartScales(Ip, freq) {
+            if (!xScale) return;
+            const period = 1 / freq;
+            const tMax = period * numPeriodsToShow;
+
+            xScale.domain([0, tMax]);
+            yScaleV.domain([-380, 380]); 
+            const iMaxScale = Math.max(1.0, Ip * 1.5); 
+            yScaleI.domain([-iMaxScale, iMaxScale]);
+
+            xAxis.call(d3.axisBottom(xScale).ticks(6).tickFormat(d3.format(".3f")));
+            yAxisLeft.call(d3.axisLeft(yScaleV).ticks(5));
+            yAxisRight.call(d3.axisRight(yScaleI).ticks(5));
+            xAxis.attr("transform", `translate(0,${yScaleV(0)})`);
+        }
+
+        /**
+         * Builds array of coordinates representing static Sine Wave trajectories
+         */
+        function generateStaticData() {
+            dataV = []; dataI = [];
+            const tMax = (1 / f) * numPeriodsToShow;
+            const omega = 2 * Math.PI * f;
+            const Ip = Vp / R;
+
+            for (let i = 0; i <= numPoints; i++) {
+                const timeStr = (i / numPoints) * tMax;
+                dataV.push({ time: timeStr, value: Vp * Math.sin(omega * timeStr) });
+                dataI.push({ time: timeStr, value: Ip * Math.sin(omega * timeStr) });
+            }
+        }
+
+        /**
+         * Binds calculated static coordinates arrays to background D3 paths
+         */
+        function drawPaths() {
+            if (svg && dataV.length > 0) {
+                svg.select(".bg-path-v").datum(dataV).attr("d", lineV);
+                svg.select(".bg-path-i").datum(dataI).attr("d", lineI);
+            }
+        }
+
+        let lastTime = 0;
+        /**
+         * Continuously triggers browser layout redrawing for the dynamic sweeps
+         * @param {number} currentTime - Absolute timestamp from performance.now()
+         */
+        function animate(currentTime) {
+            if (!lastTime) lastTime = currentTime;
+            const deltaTime = (currentTime - lastTime) / 1000; 
+            lastTime = currentTime;
+
+            if (isPlaying && svg && width > 0) {
+                const period = 1 / f;
+                t += (deltaTime * period * simSpeed * 0.4); 
+                
+                const tMax = period * numPeriodsToShow;
+                if (t > tMax) t = t % tMax;
+
+                const omega = 2 * Math.PI * f;
+                const Ip = Vp / R;
+                const currentV = Vp * Math.sin(omega * t);
+                const currentI = Ip * Math.sin(omega * t);
+
+                const activeDataV = dataV.filter(d => d.time <= t);
+                const activeDataI = dataI.filter(d => d.time <= t);
+
+                // Append local coordinates tracking active time
+                activeDataV.push({time: t, value: currentV});
+                activeDataI.push({time: t, value: currentI});
+
+                // Update active coloring vectors
+                svg.select(".active-path-v").datum(activeDataV).attr("d", lineV);
+                svg.select(".active-path-i").datum(activeDataI).attr("d", lineI);
+
+                // Shift marker pointers
+                const xPos = xScale(t);
+                svg.select(".time-line").attr("x1", xPos).attr("x2", xPos);
+                svg.select(".dot-v").attr("cx", xPos).attr("cy", yScaleV(currentV));
+                svg.select(".dot-i").attr("cx", xPos).attr("cy", yScaleI(currentI));
+            }
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        /**
+         * Toggles control board modes (Synced to Live Simulation / Decoupled Custom Board)
+         */
+        function updateExerciseModeUI() {
+            isSyncedWithSim = elements.syncToggle.checked;
+            const strings = translations[currentLang];
+            
+            if (isSyncedWithSim) {
+                elements.manualControls.classList.add('hidden');
+                elements.exModeIndicator.innerText = strings.indicatorLinked;
+                elements.exModeIndicator.className = "text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold uppercase transition-all-300";
+            } else {
+                elements.manualControls.classList.remove('hidden');
+                elements.exModeIndicator.innerText = strings.indicatorDecoupled;
+                elements.exModeIndicator.className = "text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase transition-all-300";
+            }
+        }
+
+        /**
+         * Generates physical randomized numbers for exercise practices
+         * Standard real-world standard values are preferred for pedagogical clarity.
+         */
+        function randomizeExerciseValues() {
+            // Decouple immediately on request
+            elements.syncToggle.checked = false;
+            updateExerciseModeUI();
+
+            // Set of common classroom alternating voltages (peak value equivalents)
+            const commonVoltPeaks = [110, 120, 170, 220, 311, 325, 340, 380];
+            // Set of clean, easy-to-calculate load resistances
+            const commonResistances = [10, 20, 40, 50, 100, 200, 220, 250, 500];
+
+            const randomVp = commonVoltPeaks[Math.floor(Math.random() * commonVoltPeaks.length)];
+            const randomR = commonResistances[Math.floor(Math.random() * commonResistances.length)];
+
+            // Set to manual numeric input fields
+            elements.manualVp.value = randomVp;
+            elements.manualR.value = randomR;
+
+            // Trigger updates
+            updateCalculations();
+        }
+
+        // Bind dynamic listeners on simulator inputs
+        [elements.vInput, elements.fInput, elements.rInput, elements.speedInput].forEach(input => {
+            input.addEventListener('input', updateCalculations);
+        });
+
+        // Bind manual inputs for math exercises
+        [elements.manualVp, elements.manualR].forEach(input => {
+            input.addEventListener('input', () => {
+                // Instantly update if user alters values directly
+                updateCalculations();
+            });
+        });
+
+        // Checkbox tracker for syncing toggles
+        elements.syncToggle.addEventListener('change', () => {
+            updateExerciseModeUI();
+            updateCalculations();
+        });
+
+        // Attach action click to math randomized generator
+        elements.btnRandomize.addEventListener('click', randomizeExerciseValues);
+
+        // Manage play-pause states
+        elements.playPauseBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            elements.playIcon.classList.toggle('hidden', isPlaying);
+            elements.pauseIcon.classList.toggle('hidden', !isPlaying);
+            if (isPlaying) lastTime = performance.now();
+        });
+
+        // ResizeObserver implementation to guarantee responsive redraw of D3 elements
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0) {
+                    initChart(width, height);
+                    updateCalculations();
+                }
+            }
+        });
+
+        // Initialize App on Window Load
+        window.onload = () => {
+            setLanguage('en'); 
+            resizeObserver.observe(container);
+            animationFrameId = requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
